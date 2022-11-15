@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <chrono>
-
 #ifdef GUI
 #include <GL/glut.h>
 #include <GL/gl.h>
@@ -12,10 +11,10 @@
 #endif
 
 #include "./headers/physics.h"
-#include "./headers/checkpoint.h"
+#include "./headers/logger.h"
 
 
-int block_size = 1024;
+int block_size = 512;
 
 
 int n_body;
@@ -39,14 +38,16 @@ __global__ void update_velocity(double *m, double *x, double *y, double *vx, dou
 
 void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n) {
     // TODO: Generate proper initial position and mass for better visualization
+    srand((unsigned)time(NULL));
     for (int i = 0; i < n; i++) {
         m[i] = rand() % max_mass + 1.0f;
-        x[i] = rand() % bound_x;
-        y[i] = rand() % bound_y;
+        x[i] = 2000.0f + rand() % (bound_x / 4);
+        y[i] = 2000.0f + rand() % (bound_y / 4);
         vx[i] = 0.0f;
         vy[i] = 0.0f;
     }
 }
+
 
 
 void master() {
@@ -66,17 +67,17 @@ void master() {
     double *device_vx;
     double *device_vy;
 
-    cudaMalloc(&device_m, n_body);
-    cudaMalloc(&device_x, n_body);
-    cudaMalloc(&device_y, n_body);
-    cudaMalloc(&device_vx, n_body);
-    cudaMalloc(&device_vy, n_body);
+    cudaMalloc(&device_m, n_body * sizeof(double));
+    cudaMalloc(&device_x, n_body * sizeof(double));
+    cudaMalloc(&device_y, n_body * sizeof(double));
+    cudaMalloc(&device_vx, n_body * sizeof(double));
+    cudaMalloc(&device_vy, n_body * sizeof(double));
 
-    cudaMemcpy(device_m, m, n_body, cudaMemcpyHostToDevice);
-    cudaMemcpy(device_x, x, n_body, cudaMemcpyHostToDevice);
-    cudaMemcpy(device_y, y, n_body, cudaMemcpyHostToDevice);
-    cudaMemcpy(device_vx, vx, n_body, cudaMemcpyHostToDevice);
-    cudaMemcpy(device_vy, vy, n_body, cudaMemcpyHostToDevice);
+    cudaMemcpy(device_m, m, n_body * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_x, x, n_body * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_y, y, n_body * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_vx, vx, n_body * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_vy, vy, n_body * sizeof(double), cudaMemcpyHostToDevice);
 
     int n_block = n_body / block_size + 1;
 
@@ -86,14 +87,15 @@ void master() {
         update_velocity<<<n_block, block_size>>>(device_m, device_x, device_y, device_vx, device_vy, n_body);
         update_position<<<n_block, block_size>>>(device_x, device_y, device_vx, device_vy, n_body);
 
-        cudaMemcpy(x, device_x, n_body, cudaMemcpyDeviceToHost);
-        cudaMemcpy(y, device_y, n_body, cudaMemcpyDeviceToHost);
-
-        l.save_frame(x, y);
+        cudaMemcpy(x, device_x, n_body * sizeof(double), cudaMemcpyDeviceToHost);
+        cudaMemcpy(y, device_y, n_body * sizeof(double), cudaMemcpyDeviceToHost);
 
         std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> time_span = t2 - t1;
+        
         printf("Iteration %d, elapsed time: %.3f\n", i, time_span);
+
+        l.save_frame(x, y);
 
         #ifdef GUI
         glClear(GL_COLOR_BUFFER_BIT);
@@ -115,12 +117,6 @@ void master() {
         #endif
 
     }
-
-    cudaFree(device_m);
-    cudaFree(device_x);
-    cudaFree(device_y);
-    cudaFree(device_vx);
-    cudaFree(device_vy);
 
     cudaFree(device_m);
     cudaFree(device_x);

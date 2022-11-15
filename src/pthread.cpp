@@ -11,52 +11,120 @@
 #endif
 
 #include "./headers/physics.h"
-#include "./headers/checkpoint.h"
+#include "./headers/logger.h"
 
 int n_thd; // number of threads
 
 int n_body;
 int n_iteration;
 
+pthread_barrier_t my_barrier;
+pthread_mutex_t my_lock;
+pthread_mutex_t my_lock1;
+int current_v;
+int current_p;
+
 
 void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n) {
     // TODO: Generate proper initial position and mass for better visualization
+    srand((unsigned)time(NULL));
     for (int i = 0; i < n; i++) {
         m[i] = rand() % max_mass + 1.0f;
-        x[i] = rand() % bound_x;
-        y[i] = rand() % bound_y;
+        x[i] = 2000.0f + rand() % (bound_x / 4);
+        y[i] = 2000.0f + rand() % (bound_y / 4);
         vx[i] = 0.0f;
         vy[i] = 0.0f;
     }
 }
 
 
-void update_position(double *x, double *y, double *vx, double *vy, int n) {
-    //TODO: update position 
 
+void update_position(double *x, double *y, double *vx, double *vy, int i) {
+    //TODO: update position 
+    double x_new = x[i] + vx[i] * dt;
+    double y_new = y[i] + vy[i] * dt;
+    if (x_new >= bound_x || x_new <= 0) vx[i] = - vx[i] / 2;
+    if (y_new >= bound_y || y_new <= 0) vy[i] = - vy[i] / 2;
+    x[i] += vx[i] * dt;
+    y[i] += vy[i] * dt;
 }
 
-void update_velocity(double *m, double *x, double *y, double *vx, double *vy, int n) {
+void update_velocity(double *m, double *x, double *y, double *vx, double *vy, int n, int ith) {
     //TODO: calculate force and acceleration, update velocity
+    double fx = 0.0;
+    double fy = 0.0;
 
+    for (int j = 0; j < n; j++) {
+        if (ith == j) continue;
+        double distance = sqrt(pow(x[j] - x[ith], 2) + pow(y[j] - y[ith], 2));
+        if (distance < 2 * sqrt(radius2)) {
+            vx[ith] = - vx[ith] / 2;
+            vy[ith] = - vy[ith] / 2;
+        }
+        fx += ((gravity_const * m[ith] * m[j] * (x[j] - x[ith])) / pow(distance + err, 3));
+        fy += ((gravity_const * m[ith] * m[j] * (y[j] - y[ith])) / pow(distance + err, 3));
+    }
+
+    double vx_new = vx[ith] + (fx * dt / m[ith]);
+    double vy_new = vy[ith] + (fy * dt / m[ith]);
+    vx[ith] = vx_new;
+    vy[ith] = vy_new;
 }
 
 
 typedef struct {
     //TODO: specify your arguments for threads
-    //int a;
-    //int b;
+    double* m;
+    double* x;
+    double* y;
+    double* vx;
+    double* vy;
+    int id;
     //TODO END
 } Args;
 
 
 void* worker(void* args) {
     //TODO: procedure in each threads
-
-    // Args* my_arg = (Args*) args;
+    
+    Args* my_arg = (Args*) args;
+    // printf("%d start v\n", my_arg->id);
     // int a = my_arg->a;
     // int b = my_arg->b;
+    // update velocity
+    int ith = 0;
+    while (current_v < n_body) {
+        pthread_mutex_lock(&my_lock);
+        if (current_v >= n_body) {
+            pthread_mutex_unlock(&my_lock);
+            break;
+        };
+        ith = current_v;
+        current_v = current_v + 1;
+        pthread_mutex_unlock(&my_lock);
 
+        update_velocity(my_arg->m, my_arg->x, my_arg->y, my_arg->vx, my_arg->vy, n_body, ith);
+    }
+    ith = 0;
+    // printf("%d complete v\n", my_arg->id);
+
+    pthread_barrier_wait(&my_barrier);
+
+    // printf("%d start p\n", my_arg->id);
+
+    while (current_p < n_body) {
+        pthread_mutex_lock(&my_lock1);
+        if (current_p >= n_body) {
+            pthread_mutex_unlock(&my_lock1);
+            break;
+        }
+        ith = current_p;
+        current_p = current_p + 1;
+        pthread_mutex_unlock(&my_lock1);
+
+        update_position(my_arg->x, my_arg->y, my_arg->vx, my_arg->vy, ith);
+    }
+    // printf("%d complete p\n", my_arg->id);
     // TODO END
 }
 
@@ -75,15 +143,30 @@ void master(){
     for (int i = 0; i < n_iteration; i++){
         std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
         //TODO: assign jobs
+        pthread_t thds[n_thd]; // thread pool
+        Args args[n_thd]; // arguments for all threads
+        for (int thd = 0; thd < n_thd; thd++) {
+            args[thd].m = m;
+            args[thd].x = x;
+            args[thd].y = y;
+            args[thd].vx = vx;
+            args[thd].vy = vy;
+            args[thd].id = thd;
+        }
+        current_p = 0;
+        current_v = 0;
+        for (int thd = 0; thd < n_thd; thd++) pthread_create(&thds[thd], NULL, worker, &args[thd]);
+        // printf("creat_complete\n");
+        for (int thd = 0; thd < n_thd; thd++) pthread_join(thds[thd], NULL);
         
         //TODO End
-
-        l.save_frame(x, y);
 
         std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> time_span = t2 - t1;
 
         printf("Iteration %d, elapsed time: %.3f\n", i, time_span);
+
+        l.save_frame(x, y);
 
         #ifdef GUI
         glClear(GL_COLOR_BUFFER_BIT);
@@ -119,6 +202,9 @@ int main(int argc, char *argv[]) {
     n_body = atoi(argv[1]);
     n_iteration = atoi(argv[2]);
     n_thd = atoi(argv[3]);
+    pthread_mutex_init(&my_lock, NULL);
+    pthread_mutex_init(&my_lock1, NULL);
+    pthread_barrier_init(&my_barrier, NULL, n_thd);
 
     #ifdef GUI
 	glutInit(&argc, argv);
