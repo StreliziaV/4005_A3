@@ -1,3 +1,3 @@
 #!/bin/bash
 
-./video ./checkpoints/sequential_1000_20221107025155
+./video ./checkpoints/mpi_openMP_12_20221115045103

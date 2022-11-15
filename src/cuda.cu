@@ -13,28 +13,47 @@
 #include "./headers/physics.h"
 #include "./headers/logger.h"
 
-
 int block_size = 512;
-
 
 int n_body;
 int n_iteration;
-
+std::chrono::duration<double> total_time;
 
 __global__ void update_position(double *x, double *y, double *vx, double *vy, int n) {
     //TODO: update position 
-    // int i = blockDim.x * blockIdx.x + threadIdx.x;
-    // if (i < n) {
-    // }
+    int i = blockDim.x * blockIdx.x + threadIdx.x;
+    if (i >= n) return; 
+    double x_new = x[i] + vx[i] * dt;
+    double y_new = y[i] + vy[i] * dt;
+    if (x_new >= bound_x || x_new <= 0) vx[i] = - vx[i] / 2;
+    if (y_new >= bound_y || y_new <= 0) vy[i] = - vy[i] / 2;
+    x[i] += vx[i] * dt;
+    y[i] += vy[i] * dt;
 }
 
 __global__ void update_velocity(double *m, double *x, double *y, double *vx, double *vy, int n) {
     //TODO: calculate force and acceleration, update velocity
-    // int i = blockDim.x * blockIdx.x + threadIdx.x;
-    // if (i < n) {  
-    // }
-}
+    int ith = blockDim.x * blockIdx.x + threadIdx.x;
+    if (ith >= n) return;
+    double fx = 0.0;
+    double fy = 0.0;
 
+    for (int j = 0; j < n; j++) {
+        if (ith == j) continue;
+        double distance = sqrt(pow(x[j] - x[ith], 2) + pow(y[j] - y[ith], 2));
+        if (distance < 2 * sqrt(radius2)) {
+            vx[ith] = - vx[ith] / 2;
+            vy[ith] = - vy[ith] / 2;
+        }
+        fx += ((gravity_const * m[ith] * m[j] * (x[j] - x[ith])) / pow(distance + err, 3));
+        fy += ((gravity_const * m[ith] * m[j] * (y[j] - y[ith])) / pow(distance + err, 3));
+    }
+
+    double vx_new = vx[ith] + (fx * dt / m[ith]);
+    double vy_new = vy[ith] + (fy * dt / m[ith]);
+    vx[ith] = vx_new;
+    vy[ith] = vy_new;
+}
 
 void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n) {
     // TODO: Generate proper initial position and mass for better visualization
@@ -47,8 +66,6 @@ void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n) 
         vy[i] = 0.0f;
     }
 }
-
-
 
 void master() {
     double* m = new double[n_body];
@@ -92,6 +109,7 @@ void master() {
 
         std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> time_span = t2 - t1;
+        total_time += time_span;
         
         printf("Iteration %d, elapsed time: %.3f\n", i, time_span);
 
@@ -153,6 +171,7 @@ int main(int argc, char *argv[]){
     printf("Student ID: 119010001\n"); // replace it with your student id
     printf("Name: Your Name\n"); // replace it with your name
     printf("Assignment 2: N Body Simulation CUDA Implementation\n");
+    printf("total computation time: %.3f\n", total_time);
 
     return 0;
 

@@ -17,7 +17,7 @@ int n_body;
 int n_iteration;
 
 int n_omp_threads;
-
+std::chrono::duration<double> total_time;
 
 void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n) {
     // TODO: Generate proper initial position and mass for better visualization
@@ -30,8 +30,6 @@ void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n) 
         vy[i] = 0.0f;
     }
 }
-
-
 
 void update_position(double *x, double *y, double *vx, double *vy, int i) {
     //TODO: update position
@@ -65,7 +63,6 @@ void update_velocity(double *m, double *x, double *y, double *vx, double *vy, in
     vy[ith] = vy_new;
 }
 
-
 void master() {
     double* m = new double[n_body];
     double* x = new double[n_body];
@@ -95,6 +92,7 @@ void master() {
 
         std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> time_span = t2 - t1;
+        total_time += time_span;
 
         printf("Iteration %d, elapsed time: %.3f\n", i, time_span);
 
@@ -128,7 +126,6 @@ void master() {
     
 }
 
-
 int main(int argc, char *argv[]){
     
     n_body = atoi(argv[1]);
@@ -146,9 +143,10 @@ int main(int argc, char *argv[]){
     #endif
     master();
 
-    printf("Student ID: 119010001\n"); // replace it with your student id
-    printf("Name: Your Name\n"); // replace it with your name
-    printf("Assignment 2: N Body Simulation OpenMP Implementation\n");
+    printf("Student ID: 119010369\n"); // replace it with your student id
+    printf("Name: Bodong Yan\n"); // replace it with your name
+    printf("Assignment 3: N Body Simulation OpenMP Implementation\n");
+    printf("total computation time: %.3f\n", total_time);
     
     return 0;
 

@@ -23,7 +23,7 @@ pthread_mutex_t my_lock;
 pthread_mutex_t my_lock1;
 int current_v;
 int current_p;
-
+std::chrono::duration<double> total_time;
 
 void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n) {
     // TODO: Generate proper initial position and mass for better visualization
@@ -36,8 +36,6 @@ void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n) 
         vy[i] = 0.0f;
     }
 }
-
-
 
 void update_position(double *x, double *y, double *vx, double *vy, int i) {
     //TODO: update position 
@@ -71,7 +69,6 @@ void update_velocity(double *m, double *x, double *y, double *vx, double *vy, in
     vy[ith] = vy_new;
 }
 
-
 typedef struct {
     //TODO: specify your arguments for threads
     double* m;
@@ -82,7 +79,6 @@ typedef struct {
     int id;
     //TODO END
 } Args;
-
 
 void* worker(void* args) {
     //TODO: procedure in each threads
@@ -128,7 +124,6 @@ void* worker(void* args) {
     // TODO END
 }
 
-
 void master(){
     double* m = new double[n_body];
     double* x = new double[n_body];
@@ -138,7 +133,7 @@ void master(){
 
     generate_data(m, x, y, vx, vy, n_body);
 
-    Logger l = Logger("sequential", n_body, bound_x, bound_y);
+    Logger l = Logger("pthread", n_body, bound_x, bound_y);
 
     for (int i = 0; i < n_iteration; i++){
         std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
@@ -163,6 +158,7 @@ void master(){
 
         std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> time_span = t2 - t1;
+        total_time += time_span;
 
         printf("Iteration %d, elapsed time: %.3f\n", i, time_span);
 
@@ -197,7 +193,6 @@ void master(){
 
 }
 
-
 int main(int argc, char *argv[]) {
     n_body = atoi(argv[1]);
     n_iteration = atoi(argv[2]);
@@ -217,6 +212,11 @@ int main(int argc, char *argv[]) {
 	gluOrtho2D(0, bound_x, 0, bound_y);
     #endif
     master();
+
+    printf("Student ID: 119010369\n");
+    printf("Name: Bodong Yan\n");
+    printf("Assignment 3: N Body Simulation pthread Implementation\n");
+    printf("total computation time: %.3f\n", total_time);
 
 	return 0;
 }

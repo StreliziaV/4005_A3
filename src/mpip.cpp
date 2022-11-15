@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <chrono>
 #include <mpi.h>
+#include <omp.h>
 
 #ifdef GUI
 #include <GL/glut.h>
@@ -16,6 +17,7 @@
 
 int n_body;
 int n_iteration;
+int num_thd;
 
 int my_rank;
 int world_size;
@@ -37,6 +39,7 @@ void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n) 
     }
 }
 
+
 void update_position(double *x, double *y, double *vx, double *vy, int i, int start_point, double* my_x, double* my_y, double* my_vx, double* my_vy) {
     //TODO: update position 
     double x_new = x[i] + vx[i] * dt;
@@ -54,6 +57,7 @@ void update_position(double *x, double *y, double *vx, double *vy, int i, int st
     my_x[i - start_point] = x[i];
     my_y[i - start_point] = y[i];
 }
+
 
 void update_velocity(double *m, double *x, double *y, double *vx, double *vy, int n, int ith, int start_point, double *my_vx, double *my_vy) {
     //TODO: calculate force and acceleration, update velocity
@@ -78,6 +82,7 @@ void update_velocity(double *m, double *x, double *y, double *vx, double *vy, in
     my_vx[ith - start_point] = vx[ith];
     my_vy[ith - start_point] = vy[ith];
 }
+
 
 void slave(){
     // TODO: MPI routine
@@ -110,24 +115,30 @@ void slave(){
     int term = 0;
     while (term == 0) {
         MPI_Barrier(slaves);
+        // communication start
         MPI_Recv(&term, 1, MPI_INT, 0, my_rank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Recv(local_x, n_body, MPI_DOUBLE, 0, my_rank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Recv(local_y, n_body, MPI_DOUBLE, 0, my_rank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Recv(local_vx, n_body, MPI_DOUBLE, 0, my_rank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Recv(local_vy, n_body, MPI_DOUBLE, 0, my_rank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        // communication end
 
+        // computation start
+        omp_set_num_threads(num_thd);
         for (int i = start_point; i < end_point; i++) {
             update_velocity(local_m, local_x, local_y, local_vx, local_vy, n_body, i, start_point, my_vx, my_vy);
         }
         MPI_Barrier(slaves);
+        omp_set_num_threads(num_thd);
         for (int i = start_point; i < end_point; i++) {
             update_position(local_x, local_y, local_vx, local_vy, i, start_point, my_x, my_y, my_vx, my_vy);
         }
-
+        //computation end
         MPI_Barrier(slaves);
         // if (local_rank == 1) {
         //     printf("%f, %f, %d \n", my_x[0], my_y[0], start_point);
         // }
+        // communication start
         MPI_Gather(my_x, my_num, MPI_DOUBLE, local_x, my_num, MPI_DOUBLE, 0, slaves);
         MPI_Gather(my_y, my_num, MPI_DOUBLE, local_y, my_num, MPI_DOUBLE, 0, slaves);
         MPI_Gather(my_vx, my_num, MPI_DOUBLE, local_vx, my_num, MPI_DOUBLE, 0, slaves);
@@ -139,7 +150,7 @@ void slave(){
             MPI_Send(local_vx, n_body, MPI_DOUBLE, 0, my_rank, MPI_COMM_WORLD);
             MPI_Send(local_vy, n_body, MPI_DOUBLE, 0, my_rank, MPI_COMM_WORLD);
         }
-        
+        // communication end
     }
     
     // TODO End
@@ -154,7 +165,7 @@ void master() {
 
     generate_data(total_m, total_x, total_y, total_vx, total_vy, n_body);
 
-    Logger l = Logger("mpi", n_body, bound_x, bound_y);
+    Logger l = Logger("mpi_openMP", n_body, bound_x, bound_y);
     for (int i = 1; i < world_size; i++) MPI_Send(total_m, n_body, MPI_DOUBLE, i, i, MPI_COMM_WORLD);
     
     for (int i = 0; i < n_iteration; i++){
@@ -211,9 +222,11 @@ void master() {
 
 }
 
+
 int main(int argc, char *argv[]) {
-    n_body = atoi(argv[1]);
-    n_iteration = atoi(argv[2]);
+    num_thd = atoi(argv[1]);
+    n_body = atoi(argv[2]);
+    n_iteration = atoi(argv[3]);
 
 	MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
@@ -244,10 +257,10 @@ int main(int argc, char *argv[]) {
     }
 
 	if (my_rank == 0){
-		printf("Student ID: 119010369\n"); // replace it with your student id
-		printf("Name: Bodong Yan\n"); // replace it with your name
-		printf("Assignment 2: N Body Simulation MPI Implementation\n");
-        printf("total computation time: %f\n", total_time);
+		printf("Student ID: 119010369\n");
+        printf("Name: Bodong Yan\n");
+        printf("Assignment 3: N Body Simulation mpi & openMP Implementation\n");
+        printf("total computation time: %.3f\n", total_time);
 	}
 
 	MPI_Finalize();

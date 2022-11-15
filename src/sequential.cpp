@@ -74,7 +74,6 @@ void update_velocity(double *m, double *x, double *y, double *vx, double *vy, in
     delete[] fy;
 }
 
-
 void master() {
     double* m = new double[n_body];
     double* x = new double[n_body];
@@ -128,7 +127,6 @@ void master() {
     
 }
 
-
 int main(int argc, char *argv[]){
     
     n_body = atoi(argv[1]);
@@ -146,9 +144,9 @@ int main(int argc, char *argv[]){
     master();
 
     printf("Student ID: 119010369\n"); // replace it with your student id
-    printf("Name: Your Name\n"); // replace it with your name
-    printf("Assignment 2: N Body Simulation Sequential Implementation\n");
-    printf("total time: %.3f\n", total_time);
+    printf("Name: Bodong Yan\n"); // replace it with your name
+    printf("Assignment 3: N Body Simulation Sequential Implementation\n");
+    printf("total computation time: %.3f\n", total_time);
     
     return 0;
 
